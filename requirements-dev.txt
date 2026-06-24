@@ -1,0 +1,11 @@
+# Dependencies to develop/test every skill in this collection.
+olefile>=0.46      # hwp-toolkit core
+pymupdf>=1.23      # pdf-parser core (imported as fitz)
+pdfplumber>=0.10   # pdf-parser table extraction
+reportlab>=4       # pdf-parser test fixtures (PDF generation)
+pillow>=10         # pdf-parser test fixtures (scanned-page raster)
+pytest>=7
+
+# Optional per-skill extras:
+# pyhwp>=0.1b15    # hwp-toolkit: hwp5txt / hwp5html / hwp5odt conversion
+# camelot-py[cv]   # pdf-parser: optional second-opinion table extractor

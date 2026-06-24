@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+build/
+
+# git worktrees checked out inside the repo (never commit a worktree)
+.worktrees/
+
+# Generated test fixtures (recreate with each skill's make_fixtures.py)
+tests/**/fixtures/*.hwp
+tests/**/fixtures/*.hwpx
+tests/**/fixtures/_*.hwp
+tests/**/fixtures/*.pdf
+tests/**/fixtures/_*
+
+# Real / private sample documents — never commit third-party files
+examples/hwp/
+examples/pdf/
+
+# Internal AI-agent dev tooling — keep private, never publish
+.agents/
+.dev-trio/
+*.bundle
+
+# Clean public tree produced by scripts/export_public.py (regenerated)
+dist/public/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
