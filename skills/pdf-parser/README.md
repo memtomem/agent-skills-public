@@ -21,21 +21,31 @@ language pack required.
 ### Claude Code / Claude Desktop / Cowork
 
 Drop the skill folder into a skills directory and your agent picks it up
-automatically:
+automatically. From the repository root:
 
 ```bash
-# available in every project (recommended)
-cp -R pdf-parser ~/.claude/skills/
-
-# or scoped to one project
-cp -R pdf-parser <your-project>/.claude/skills/
+mkdir -p ~/.claude/skills
+cp -R skills/pdf-parser ~/.claude/skills/
 ```
 
-(Equivalently, build `dist/pdf-parser.skill` with `python scripts/build_all.py
-pdf-parser` and use the app's **Save skill** button.) Once installed, just
-mention a PDF — “이 PDF에서 표랑 본문 뽑아줘”, “convert this report.pdf to
-markdown” — and the skill triggers; no special syntax needed. You can also
-invoke it explicitly with `/pdf-parser`.
+If you are already inside `skills/pdf-parser/`, use:
+
+```bash
+mkdir -p ~/.claude/skills/pdf-parser
+cp -R . ~/.claude/skills/pdf-parser/
+```
+
+To scope it to one project, copy the folder into that project's
+`.claude/skills/` directory instead. You can also build `dist/pdf-parser.skill`
+from the repository root and use the app's **Save skill** button:
+
+```bash
+uv run python scripts/build_all.py pdf-parser
+```
+
+Once installed, just mention a PDF — “이 PDF에서 표랑 본문 뽑아줘”, “convert this
+report.pdf to markdown” — and the skill triggers; no special syntax needed. You
+can also invoke it explicitly with `/pdf-parser`.
 
 ### Codex, Cursor, or any shell-capable agent
 
@@ -45,6 +55,19 @@ agent at `SKILL.md` for the triage → parse → vision-transcribe → verify
 playbook.
 
 ## Workflow
+
+Most users should ask their agent in plain language first:
+
+- “이 PDF에서 본문과 표를 Markdown으로 뽑아줘.”
+- “Convert this annual-report.pdf to Markdown and keep tables structured.”
+- “이 스캔 PDF를 페이지별로 분류하고 스캔 페이지를 전사해줘.”
+- “Extract the tables as JSON so I can load them into pandas.”
+
+The agent triages the PDF, uses local extraction where possible, renders pages
+that need visual review, and asks for or performs vision transcription only for
+the pages that need it.
+
+For direct command-line use:
 
 ```bash
 cd scripts
@@ -76,7 +99,11 @@ JSON element schema.
 ## Dependencies
 
 PyMuPDF and pdfplumber are required; camelot and tesseract are used
-opportunistically if present. Install: `pip install pymupdf pdfplumber`.
+opportunistically if present.
+
+```bash
+pip install pymupdf pdfplumber
+```
 
 ## Troubleshooting
 

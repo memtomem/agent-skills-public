@@ -49,20 +49,32 @@ set of **standalone Python CLIs** (`scripts/`) that any tool — or you — can 
 ### Claude Code / Claude Desktop / Cowork
 
 Drop the skill folder into a skills directory and your agent picks it up
-automatically:
+automatically. From the repository root:
 
 ```bash
-# available in every project (recommended)
-cp -R hwp-toolkit ~/.claude/skills/
-
-# or scoped to one project
-cp -R hwp-toolkit <your-project>/.claude/skills/
+mkdir -p ~/.claude/skills
+cp -R skills/hwp-toolkit ~/.claude/skills/
 ```
 
-(Equivalently, build the packaged `dist/hwp-toolkit.skill` and use the app's
-**Save skill** button.) Once installed, just mention a `.hwp`/`.hwpx` file or a
-"한글 문서" and the skill triggers — no special syntax needed. You can also
-invoke it explicitly with `/hwp-toolkit`.
+If you are already inside `skills/hwp-toolkit/`, use:
+
+```bash
+mkdir -p ~/.claude/skills/hwp-toolkit
+cp -R . ~/.claude/skills/hwp-toolkit/
+```
+
+To scope it to one project, copy the folder into that project's
+`.claude/skills/` directory instead. You can also build the packaged
+`dist/hwp-toolkit.skill` from the repository root and use the app's **Save
+skill** button:
+
+```bash
+uv run python scripts/build_all.py hwp-toolkit
+```
+
+Once installed, just mention a `.hwp`/`.hwpx` file or a "한글 문서" and the skill
+triggers — no special syntax needed. You can also invoke it explicitly with
+`/hwp-toolkit`.
 
 ### Codex CLI, Cursor, or any shell-capable agent
 
@@ -83,7 +95,12 @@ CLIs whose only dependency is `olefile`. To let another coding agent use them:
 
 ### Directly, as a human
 
-The CLIs are useful on their own — see **Usage** below.
+The CLIs are useful on their own. Install the dependency, then see
+**Running the scripts directly** below:
+
+```bash
+pip install olefile
+```
 
 ---
 

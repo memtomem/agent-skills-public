@@ -18,20 +18,32 @@
 
 ### Claude Code / Claude Desktop / Cowork
 
-스킬 폴더를 스킬 디렉터리에 넣으면 에이전트가 자동으로 인식합니다:
+스킬 폴더를 스킬 디렉터리에 넣으면 에이전트가 자동으로 인식합니다. 저장소 루트에서
+실행하세요.
 
 ```bash
-# 모든 프로젝트에서 사용 (권장)
-cp -R pdf-parser ~/.claude/skills/
-
-# 또는 특정 프로젝트에만
-cp -R pdf-parser <프로젝트>/.claude/skills/
+mkdir -p ~/.claude/skills
+cp -R skills/pdf-parser ~/.claude/skills/
 ```
 
-(또는 `python scripts/build_all.py pdf-parser`로 `dist/pdf-parser.skill`을
-빌드해 앱의 **Save skill** 버튼으로 설치합니다.) 설치 후에는 PDF를 언급하기만
-하면 — “이 PDF에서 표랑 본문 뽑아줘”, “convert this report.pdf to markdown” —
-스킬이 자동으로 동작합니다. `/pdf-parser`로 직접 호출할 수도 있습니다.
+이미 `skills/pdf-parser/` 안에 있다면 이렇게 실행합니다.
+
+```bash
+mkdir -p ~/.claude/skills/pdf-parser
+cp -R . ~/.claude/skills/pdf-parser/
+```
+
+특정 프로젝트에만 적용하려면 그 프로젝트의 `.claude/skills/` 아래로 복사하면
+됩니다. 패키지 파일을 쓰는 앱이라면 저장소 루트에서 빌드한 뒤 **Save skill**
+버튼으로 설치할 수 있습니다.
+
+```bash
+uv run python scripts/build_all.py pdf-parser
+```
+
+설치 후에는 PDF를 언급하기만 하면 — “이 PDF에서 표랑 본문 뽑아줘”, “convert
+this report.pdf to markdown” — 스킬이 자동으로 동작합니다. `/pdf-parser`로
+직접 호출할 수도 있습니다.
 
 ### Codex, Cursor, 그 밖의 셸 실행 가능한 에이전트
 
@@ -41,6 +53,18 @@ cp -R pdf-parser <프로젝트>/.claude/skills/
 알려주면 됩니다.
 
 ## 작업 흐름
+
+대부분의 사용자는 먼저 에이전트에게 자연어로 요청하면 됩니다.
+
+- “이 PDF에서 본문과 표를 Markdown으로 뽑아줘.”
+- “이 연차보고서 PDF를 Markdown으로 바꾸고 표 구조는 유지해줘.”
+- “이 스캔 PDF를 페이지별로 분류하고 스캔 페이지를 전사해줘.”
+- “이 PDF의 표를 pandas로 불러올 수 있게 JSON으로 뽑아줘.”
+
+에이전트가 PDF를 분류하고, 로컬 추출이 가능한 페이지는 바로 처리하며, 시각적
+확인이 필요한 페이지만 렌더링하고 비전 전사를 요청하거나 수행합니다.
+
+명령줄에서 직접 실행할 때는 아래 흐름을 씁니다.
 
 ```bash
 cd scripts
@@ -71,7 +95,11 @@ python pdf_parse.py INPUT.pdf -o OUTDIR
 ## 의존성
 
 PyMuPDF와 pdfplumber가 필수입니다. camelot과 tesseract는 설치되어 있으면
-기회적으로 사용합니다. 설치: `pip install pymupdf pdfplumber`.
+기회적으로 사용합니다.
+
+```bash
+pip install pymupdf pdfplumber
+```
 
 ## 문제 해결
 

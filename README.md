@@ -2,74 +2,105 @@
 
 *[한국어 → README.ko.md](README.ko.md)*
 
-Installable **skills** for [Claude](https://claude.com) and other coding agents.
-Each skill packages a focused instruction manual with the scripts and references
-needed to complete one specialized task reliably.
+Installable **document-processing skills** for [Claude](https://claude.com) and
+other coding agents. Each skill bundles:
+
+- a `SKILL.md` playbook that tells an agent exactly what to do,
+- runnable Python scripts for direct command-line use,
+- references and tests that keep the behavior reproducible.
 
 The collection focuses on getting clean, structured content out of documents that
 ordinary tools mishandle — Korean Hangul Word Processor files and messy,
 unstructured PDFs.
 
-## Skills
+## Which skill do I need?
 
-| Skill | What it does | Status |
+| I have... | Use | Output |
 |---|---|---|
-| [`hwp-toolkit`](skills/hwp-toolkit/) | Read, inspect, and fill Hangul Word Processor files (`.hwp` / `.hwpx`, 아래아한글 / 한컴오피스). Extract text, inspect document structure, replace placeholders, and fill Korean form templates while preserving layout. | Stable |
-| [`pdf-parser`](skills/pdf-parser/) | Parse messy, unstructured PDFs (mixed text, multi-column, ruled tables, charts, scanned pages) into clean Markdown + a structured JSON element tree. Triages each page and routes scanned/figure pages to vision. Korean + English. | Stable |
+| a Korean Hangul document (`.hwp` / `.hwpx`) | [`hwp-toolkit`](skills/hwp-toolkit/) | extracted text, structure inspection, or a filled copy of the original form |
+| a real-world PDF with tables, columns, scans, or charts | [`pdf-parser`](skills/pdf-parser/) | clean Markdown, JSON elements, rendered page assets, and vision placeholders where needed |
 
 More skills will be added under [`skills/`](skills/) over time.
 
-## Get Started
+## Fastest path
 
-### Claude Code / Claude Desktop / Cowork
+### 1. Install a skill for Claude Code / Claude Desktop / Cowork
 
-Drop a skill folder into your skills directory and the agent picks it up
-automatically (recommended):
+From the repository root:
 
 ```bash
-cp -R skills/hwp-toolkit ~/.claude/skills/    # or: cp -R skills/pdf-parser ...
+mkdir -p ~/.claude/skills
+cp -R skills/hwp-toolkit ~/.claude/skills/    # for .hwp / .hwpx
+cp -R skills/pdf-parser ~/.claude/skills/     # for PDFs
 ```
 
-You can also import the packaged `.skill` file when your app offers skill import:
+If your app imports packaged skills, build the `.skill` files instead:
 
 ```bash
 uv run python scripts/build_all.py            # builds every dist/<name>.skill
 ```
 
-Then import the `dist/<name>.skill` you want with the app's **Save skill** or
-skill import flow.
+Then import the `dist/<name>.skill` file you want with the app's **Save skill**
+or skill import flow.
 
-After installation, just mention the file or task in your prompt — a `.hwp` /
-`.hwpx` document, a PDF to extract, "한글 문서", etc. The agent reads the matching
-skill and runs the right steps for you.
+### 2. Ask in plain language
 
-### Codex, Cursor, or Other Coding Agents
+After installation, mention the file and the result you want:
+
+- "`application.hwp`에서 표를 포함해 텍스트를 추출해줘."
+- "Fill the course title and instructor name in this Korean `.hwp` template."
+- "Convert `report.pdf` to Markdown and keep tables as tables."
+- "Triage this scanned contract PDF and transcribe the scanned pages."
+
+The agent reads the matching skill, runs the scripts, and returns the extracted
+content or a new edited file. The original document should not be overwritten.
+
+### 3. Use with Codex, Cursor, or another shell-capable agent
 
 Each skill ships normal Python command-line tools under its `scripts/` folder.
-For agents that don't support `.skill` packages directly, copy the skill folder
-or scripts into your project and point your agent at its `SKILL.md` playbook:
+For agents that do not support `.skill` packages directly, copy the skill folder
+or scripts into your project and point the agent at its `SKILL.md` playbook:
 
 - **hwp-toolkit** — [`SKILL.md`](skills/hwp-toolkit/SKILL.md) · [`README.md`](skills/hwp-toolkit/README.md)
 - **pdf-parser** — [`SKILL.md`](skills/pdf-parser/SKILL.md) · [`README.md`](skills/pdf-parser/README.md)
 
-## Example Prompts
+## Direct CLI examples
 
-Ask in plain language; the agent picks the skill.
+Use these when you want to run the scripts yourself rather than through an
+agent.
 
-**hwp-toolkit**
+```bash
+# hwp-toolkit
+cd skills/hwp-toolkit/scripts
+python hwp_extract.py FILE.hwp
+python hwp_inspect.py FILE.hwp --paragraphs
+python hwp_edit.py replace IN.hwp OUT.hwp --pair "OLD" "NEW"
 
-- "Extract the text from this `application.hwp`, including tables."
-- "Fill the course title and instructor name in this Korean `.hwp` form template."
-- "Convert this `.hwpx` document into clean Markdown."
+# pdf-parser
+cd ../../pdf-parser/scripts
+python pdf_triage.py INPUT.pdf
+python pdf_parse.py INPUT.pdf -o OUTDIR
+```
 
-**pdf-parser**
+Install all development dependencies first if you are using the scripts from a
+fresh checkout:
 
-- "Convert this `report.pdf` to Markdown and keep the tables as tables."
-- "이 PDF에서 표랑 본문만 마크다운으로 뽑아줘."
-- "Triage this scanned contract PDF and transcribe the scanned pages."
-- "Pull the tables out of this PDF into JSON I can load into pandas."
+```bash
+uv venv
+uv pip install -r requirements-dev.txt
+```
 
-## Useful Links
+## For contributors
+
+```bash
+uv run pytest -q
+uv run python scripts/build_all.py
+```
+
+Fixtures are generated from scratch by the test suite. Do not commit private
+documents, customer files, or generated binary fixtures.
+
+## Guides
 
 **hwp-toolkit**
 
@@ -80,8 +111,6 @@ Ask in plain language; the agent picks the skill.
 
 - User guide: [`README.md`](skills/pdf-parser/README.md) · Korean guide: [`README.ko.md`](skills/pdf-parser/README.ko.md)
 - Agent playbook: [`SKILL.md`](skills/pdf-parser/SKILL.md) · Format internals: [`references/pdf_internals.md`](skills/pdf-parser/references/pdf_internals.md)
-
-No private or third-party documents are included in this repository.
 
 ## License
 
