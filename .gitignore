@@ -15,19 +15,15 @@ tests/**/fixtures/*.hwp
 tests/**/fixtures/*.hwpx
 tests/**/fixtures/_*.hwp
 tests/**/fixtures/*.pdf
+tests/**/fixtures/*.xlsx
+tests/**/fixtures/*.xlsm
+tests/**/fixtures/*.docx
+tests/**/fixtures/*.pptx
 tests/**/fixtures/_*
 
 # Real / private sample documents — never commit third-party files
 examples/hwp/
 examples/pdf/
-
-# Internal AI-agent dev tooling — keep private, never publish
-.agents/
-.dev-trio/
-*.bundle
-
-# Clean public tree produced by scripts/export_public.py (regenerated)
-dist/public/
 
 # OS / editor
 .DS_Store

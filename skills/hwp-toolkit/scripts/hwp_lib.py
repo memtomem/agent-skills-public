@@ -25,10 +25,13 @@ Only stdlib + `olefile` are required for everything except convenience
 conversion helpers. Editing keeps every untouched stream byte-identical and
 only rewrites the section(s) you change, so formatting/tables are preserved.
 """
+import csv
 import html
+import io
 import math
 import re
 import struct
+import xml.etree.ElementTree as ET
 import zipfile
 import zlib
 
@@ -271,6 +274,273 @@ def extract_text(path, table_markers=True):
             if r.tag == T_PARA_TEXT:
                 lines.append(clean_text(r.text()))
     return "\n".join(lines)
+
+
+# ===========================================================================
+# Table extraction
+# ===========================================================================
+# A .hwp table is a control: a CTRL_HEADER (71) whose children are one TABLE
+# (77) record carrying the grid dimensions, followed by one LIST_HEADER (72)
+# per cell carrying the cell's address/span; each cell's paragraphs nest one
+# level deeper than its LIST_HEADER. extract_text() only marks "[표]"; this
+# section reconstructs the real 2-D grid (resolving rowspan/colspan and
+# multi-paragraph cells) for .hwp and the equivalent <hp:tbl> for .hwpx.
+T_CTRL_HEADER = 71
+T_LIST_HEADER = 72
+T_TABLE = 77
+# A cell LIST_HEADER needs npara(2)+flags(4)+col(2)+row(2)+colSpan(2)+rowSpan(2)
+# = 14 bytes; a shorter LIST_HEADER (e.g. a caption list) is not a cell.
+_CELL_HEADER_MIN = 14
+
+
+def _u16(buf, off):
+    return int.from_bytes(buf[off:off + 2], "little") if off + 2 <= len(buf) else 0
+
+
+def _parse_table_dims(payload):
+    """(nrows, ncols) from a HWPTAG_TABLE payload.
+    Layout: flags u32 | nRows u16 | nCols u16 | cellSpacing u16 | ... ."""
+    return _u16(payload, 4), _u16(payload, 6)
+
+
+def _parse_cell_addr(payload):
+    """(col, row, colspan, rowspan) from a table-cell LIST_HEADER payload.
+    Layout: nParagraphs u16 | listflags u32 | col u16 | row u16 |
+            colSpan u16 | rowSpan u16 | width u32 | height u32 | ... ."""
+    return (_u16(payload, 6), _u16(payload, 8),
+            max(1, _u16(payload, 10)), max(1, _u16(payload, 12)))
+
+
+def _cell_text(content):
+    """Own text of a cell from its content records, excluding any nested table
+    (whose paragraphs sit at a deeper level). A cell's own text is the
+    PARA_TEXT one level below the cell's first PARA_HEADER, so a nested table's
+    deeper paragraphs never leak in. Multiple own paragraphs join with '\\n'."""
+    text_level = None
+    for r in content:
+        if r.tag == T_DOC_PARA_HEADER:
+            text_level = r.level + 1
+            break
+    if text_level is None:
+        return ""
+    return "\n".join(clean_text(r.text()) for r in content
+                     if r.tag == T_PARA_TEXT and r.level == text_level)
+
+
+def _assemble_table(nrows, ncols, cells):
+    """Pack parsed cells into a table dict, inferring dimensions when the TABLE
+    record omits them (fall back to the cells' own addresses + spans)."""
+    if not nrows or not ncols:
+        nrows = max((c["row"] + c["rowspan"] for c in cells), default=0)
+        ncols = max((c["col"] + c["colspan"] for c in cells), default=0)
+    spans = [{"row": c["row"], "col": c["col"],
+              "rowspan": c["rowspan"], "colspan": c["colspan"]}
+             for c in cells if c["rowspan"] > 1 or c["colspan"] > 1]
+    return {"nrows": nrows, "ncols": ncols, "cells": cells, "spans": spans}
+
+
+def _tables_from_records(recs):
+    """Reconstruct every table in one section's records, including nested ones
+    (each TABLE record is processed independently of its nesting depth)."""
+    out, n = [], len(recs)
+    for i, r in enumerate(recs):
+        if r.tag != T_TABLE:
+            continue
+        tlevel = r.level
+        nrows, ncols = _parse_table_dims(r.payload)
+        cells = []
+        j = i + 1
+        while j < n and recs[j].level >= tlevel:
+            rj = recs[j]
+            if (rj.tag == T_LIST_HEADER and rj.level == tlevel
+                    and len(rj.payload) >= _CELL_HEADER_MIN):
+                col, row, cspan, rspan = _parse_cell_addr(rj.payload)
+                k = j + 1
+                content = []
+                while k < n and recs[k].level > tlevel:
+                    content.append(recs[k])
+                    k += 1
+                cells.append({"row": row, "col": col,
+                              "rowspan": rspan, "colspan": cspan,
+                              "text": _cell_text(content)})
+                j = k
+            else:
+                j += 1
+        out.append(_assemble_table(nrows, ncols, cells))
+    return out
+
+
+def _hx_local(el):
+    """Local (namespace-stripped) tag name of an ElementTree element."""
+    return el.tag.rsplit("}", 1)[-1]
+
+
+def _hx_t_text(el):
+    """Readable text of an <hp:t> subtree for a table cell: map inline
+    <hp:lineBreak/> -> '\\n' and <hp:tab/> -> '\\t' (same as _hwpx_run_to_text),
+    keep every text run and tail, and drop other inline markup (markpen, …).
+    A plain itertext() would silently swallow the breaks and tabs."""
+    name = _hx_local(el)
+    if name == "lineBreak":
+        head = "\n"
+    elif name == "tab":
+        head = "\t"
+    else:
+        head = el.text or ""
+    parts = [head]
+    for child in el:
+        parts.append(_hx_t_text(child))
+        parts.append(child.tail or "")
+    return "".join(parts)
+
+
+def _hx_para_text(p_el):
+    """Own text of one <hp:p>: join its <hp:t> runs, skipping object runs so a
+    nested <hp:tbl> (which lives in its own run) never leaks into the cell."""
+    parts = []
+    for run in p_el:
+        if _hx_local(run) != "run":
+            continue
+        for child in run:
+            if _hx_local(child) == "t":
+                parts.append(_hx_t_text(child))
+    return "".join(parts)
+
+
+def _hx_cell_text(tc_el):
+    paras = [_hx_para_text(p)
+             for sub in tc_el if _hx_local(sub) == "subList"
+             for p in sub if _hx_local(p) == "p"]
+    return "\n".join(paras)
+
+
+def _extract_tables_hwpx(path):
+    out = []
+    with zipfile.ZipFile(path) as z:
+        secs = sorted(n for n in z.namelist()
+                      if re.fullmatch(r"Contents/section\d+\.xml", n))
+        for sec in secs:
+            root = ET.fromstring(z.read(sec))
+            for tbl in root.iter():
+                if _hx_local(tbl) != "tbl":
+                    continue
+                nrows = int(tbl.get("rowCnt") or 0)
+                ncols = int(tbl.get("colCnt") or 0)
+                cells = []
+                for tr in tbl:
+                    if _hx_local(tr) != "tr":
+                        continue
+                    for tc in tr:
+                        if _hx_local(tc) != "tc":
+                            continue
+                        addr = next((c for c in tc if _hx_local(c) == "cellAddr"), None)
+                        span = next((c for c in tc if _hx_local(c) == "cellSpan"), None)
+                        col = int(addr.get("colAddr", 0)) if addr is not None else 0
+                        row = int(addr.get("rowAddr", 0)) if addr is not None else 0
+                        cspan = int(span.get("colSpan", 1)) if span is not None else 1
+                        rspan = int(span.get("rowSpan", 1)) if span is not None else 1
+                        cells.append({"row": row, "col": col,
+                                      "rowspan": max(1, rspan),
+                                      "colspan": max(1, cspan),
+                                      "text": _hx_cell_text(tc)})
+                t = _assemble_table(nrows, ncols, cells)
+                t["section"], t["index"] = sec, len(out)
+                out.append(t)
+    return out
+
+
+def extract_tables(path):
+    """Return every table in a .hwp/.hwpx as a list of dicts:
+    {section, index, nrows, ncols, cells:[{row,col,rowspan,colspan,text}],
+     spans:[{row,col,rowspan,colspan}]} — in document order, nested tables
+    included as their own entries. Use table_grid() to materialize a 2-D grid
+    or the tables_to_*/table_to_* helpers to render CSV / Markdown / JSON."""
+    if is_hwpx(path):
+        return _extract_tables_hwpx(path)
+    streams = read_streams(path)
+    if is_encrypted(streams):
+        raise ValueError("File is password-protected/encrypted; cannot read.")
+    comp = is_compressed(streams)
+    out = []
+    for sec in section_names(streams):
+        recs = parse_records(decompress(streams[sec], comp))
+        for t in _tables_from_records(recs):
+            t["section"], t["index"] = sec, len(out)
+            out.append(t)
+    return out
+
+
+def table_grid(table, expand="blank"):
+    """Materialize a table dict as a list-of-rows 2-D grid. A merged cell's
+    value sits in its top-left position; the cells it covers are "" when
+    expand="blank" (GFM/visual default) or repeat the value when
+    expand="duplicate" (tidy/CSV default for downstream joins)."""
+    nrows, ncols = table["nrows"], table["ncols"]
+    grid = [["" for _ in range(ncols)] for _ in range(nrows)]
+    for c in table["cells"]:
+        row, col = c["row"], c["col"]
+        if not (0 <= row < nrows and 0 <= col < ncols):
+            continue
+        grid[row][col] = c["text"]
+        for dr in range(c["rowspan"]):
+            for dc in range(c["colspan"]):
+                rr, cc = row + dr, col + dc
+                if (dr or dc) and rr < nrows and cc < ncols and expand == "duplicate":
+                    grid[rr][cc] = c["text"]
+    return grid
+
+
+def _md_cell(text):
+    """Escape a cell for a GFM table: '|' breaks columns, newlines break rows."""
+    return text.replace("\\", "\\\\").replace("|", "\\|").replace("\n", "<br>")
+
+
+def table_to_markdown(table, expand="blank"):
+    """Render one table as a GFM table (row 0 as the header), appending a note
+    listing any merged-cell spans since GFM cannot express them natively."""
+    grid = table_grid(table, expand)
+    ncols = table["ncols"]
+    if not grid or not ncols:
+        return "(빈 표)"
+
+    def row(cells):
+        cells = list(cells) + [""] * (ncols - len(cells))
+        return "| " + " | ".join(_md_cell(c) for c in cells) + " |"
+
+    lines = [row(grid[0]), "| " + " | ".join(["---"] * ncols) + " |"]
+    lines += [row(r) for r in grid[1:]]
+    md = "\n".join(lines)
+    if table["spans"]:
+        notes = ", ".join(f"(r{s['row']},c{s['col']})→{s['rowspan']}×{s['colspan']}"
+                          for s in table["spans"])
+        md += f"\n\n> 병합 셀(rowspan×colspan): {notes}"
+    return md
+
+
+def tables_to_markdown(tables, expand="blank"):
+    blocks = []
+    for t in tables:
+        blocks.append(f"### 표 {t.get('index', 0) + 1} ({t.get('section', '')})\n\n"
+                      + table_to_markdown(t, expand))
+    return "\n\n".join(blocks)
+
+
+def table_to_csv(table, expand="duplicate"):
+    """Render one table as CSV. Defaults to expand="duplicate" so each row is
+    self-contained for spreadsheet/SQL import."""
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    for r in table_grid(table, expand):
+        w.writerow(r)
+    return buf.getvalue()
+
+
+def tables_to_json(tables, expand="blank"):
+    return {"tables": [
+        {"section": t.get("section"), "index": t.get("index"),
+         "nrows": t["nrows"], "ncols": t["ncols"],
+         "grid": table_grid(t, expand), "spans": t["spans"]}
+        for t in tables]}
 
 
 # ===========================================================================

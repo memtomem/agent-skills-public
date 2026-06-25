@@ -23,6 +23,9 @@ set of **standalone Python CLIs** (`scripts/`) that any tool — or you — can 
 - **Extract** text from `.hwp` and `.hwpx` — table-aware (`[표]` markers),
   multi-section-aware (`=== section ===` headers), and inline-control-clean
   (no leaked `secd`/`tbl`/`<hp:lineBreak/>` noise).
+- **Extract tables** as a real 2-D grid — resolves merged cells
+  (rowspan/colspan) and multi-paragraph cells into CSV, Markdown, or JSON,
+  instead of the loose run of lines plain text extraction gives you.
 - **Inspect** structure: streams, compression/encryption flags, record-tag
   counts, and per-paragraph indices for precise editing.
 - **Edit / fill forms** without breaking the document: find-replace on both
@@ -124,6 +127,7 @@ right tool, runs the steps in order, and gives you the result — for edits, a
 - “이 위임장.hwp에서 텍스트만 뽑아줘.”
 - “사업계획서.hwp를 다섯 줄로 요약해줘.”
 - “이 폐업신고서.hwpx 내용을 **표까지 포함해서** 정리해줘.”
+- “예산안.hwp의 표를 CSV로 뽑아줘 (병합된 칸도 살려서).”
 - “Convert 보고서.hwp to clean Markdown.”
 
 **Fill in a form or template** — the most common request
@@ -171,6 +175,7 @@ plain CLIs — run them from the `scripts/` directory (they import `hwp_lib`):
 cd scripts
 
 python hwp_extract.py FILE.hwp                    # read text (.hwpx auto-detected)
+python hwp_tables.py  FILE.hwp -f csv             # tables as a real grid (md/csv/json)
 python hwp_inspect.py FILE.hwp --paragraphs       # inspect first: exact placeholders + indices
 
 # fill a form — copy the placeholder verbatim from --paragraphs
@@ -200,6 +205,7 @@ command works on `.hwpx` (auto-detected). Every flag is documented in
 | | `.hwp` | `.hwpx` |
 |---|:---:|:---:|
 | Extract text (tables, multi-section, clean controls) | ✅ | ✅ |
+| Extract tables as a structured grid (CSV/Markdown/JSON) | ✅ | ✅ |
 | Inspect streams / compression / encryption / metadata | ✅ | ✅ (zip members) |
 | Find-replace form filling | ✅ | ✅ |
 | Set cell by record index | ✅ | ⛔ (use find-replace) |

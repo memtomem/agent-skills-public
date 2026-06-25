@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 """Tests for the hwp-toolkit skill. Fixtures are generated from scratch
 (no third-party documents) by fixtures/make_fixtures.py."""
+import csv
+import io
 import os
 import sys
 import zipfile
@@ -203,3 +205,75 @@ def test_replace_hwpx_preserves_inline_tags(tmp_path):
     assert "<hp:lineBreak/>" in sec               # inline element intact
     assert "&lt;hp:lineBreak/&gt;" not in sec     # not double-escaped/corrupted
     assert "기부식품업,\n건강기능식품판매업" in hwp_lib.extract_text(out)
+
+
+# ---- table extraction -----------------------------------------------------
+def test_extract_table_hwp_grid():
+    tables = hwp_lib.extract_tables(p("sample_table.hwp"))
+    assert len(tables) == 1
+    t = tables[0]
+    assert (t["nrows"], t["ncols"]) == (2, 3)
+    grid = hwp_lib.table_grid(t)                       # default expand="blank"
+    assert grid[0] == ["항목", "예산", "비고\n(원)"]    # multi-paragraph cell joins
+    assert grid[1][0] == "합계"
+    assert grid[1][1] == "1,000"
+    assert grid[1][2] == ""                            # merged-over cell stays blank
+
+
+def test_extract_table_span_metadata():
+    t = hwp_lib.extract_tables(p("sample_table.hwp"))[0]
+    assert t["spans"] == [{"row": 1, "col": 1, "rowspan": 1, "colspan": 2}]
+
+
+def test_extract_table_expand_duplicate():
+    t = hwp_lib.extract_tables(p("sample_table.hwp"))[0]
+    grid = hwp_lib.table_grid(t, expand="duplicate")
+    assert grid[1][2] == "1,000"                       # covered cell repeats value
+
+
+def test_table_renders_gfm_with_span_note():
+    t = hwp_lib.extract_tables(p("sample_table.hwp"))[0]
+    md = hwp_lib.table_to_markdown(t)
+    assert "| 항목 | 예산 | 비고<br>(원) |" in md       # newline -> <br>, header row
+    assert "| --- | --- | --- |" in md
+    assert "병합 셀" in md and "(r1,c1)→1×2" in md
+
+
+def test_table_csv_duplicates_merged_cell():
+    t = hwp_lib.extract_tables(p("sample_table.hwp"))[0]
+    # parse back with csv so the multi-line cell's embedded newline is handled
+    rows = list(csv.reader(io.StringIO(hwp_lib.table_to_csv(t))))
+    assert rows[0] == ["항목", "예산", "비고\n(원)"]
+    assert rows[1] == ["합계", "1,000", "1,000"]        # csv default duplicates merge
+
+
+def test_extract_table_hwpx_grid_matches_binary():
+    t = hwp_lib.extract_tables(p("sample_table.hwpx"))[0]
+    assert (t["nrows"], t["ncols"]) == (2, 3)
+    grid = hwp_lib.table_grid(t)
+    assert grid[0] == ["항목", "예산", "비고\n(원)"]
+    assert grid[1][:2] == ["합계", "1,000"] and grid[1][2] == ""
+    assert t["spans"] == [{"row": 1, "col": 1, "rowspan": 1, "colspan": 2}]
+
+
+def test_hwpx_table_cell_preserves_inline_linebreak_and_tab():
+    # the fixture's 2nd table is one cell whose text has an inline line break
+    # and tab; they must map to \n / \t, not be swallowed (matches non-table runs)
+    tables = hwp_lib.extract_tables(p("sample_table.hwpx"))
+    assert len(tables) == 2
+    assert hwp_lib.table_grid(tables[1])[0][0] == "윗줄\n아랫줄\t탭뒤"
+
+
+def test_extract_tables_json_shape():
+    tables = hwp_lib.extract_tables(p("sample_table.hwp"))
+    doc = hwp_lib.tables_to_json(tables)
+    assert list(doc) == ["tables"] and len(doc["tables"]) == 1
+    one = doc["tables"][0]
+    assert one["section"] == "BodyText/Section0" and one["index"] == 0
+    assert one["nrows"] == 2 and one["ncols"] == 3
+    assert one["grid"][0][0] == "항목"
+
+
+def test_extract_text_still_marks_table():
+    txt = hwp_lib.extract_text(p("sample_table.hwp"))
+    assert "[표]" in txt and "표 제목" in txt and "표 끝" in txt

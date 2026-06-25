@@ -22,6 +22,9 @@
 - **추출**: `.hwp`·`.hwpx` 텍스트 추출 — 표 인식(`[표]` 표시),
   다중 섹션 인식(`=== section ===` 헤더), 인라인 제어문자 정리
   (`secd`/`tbl`/`<hp:lineBreak/>` 같은 잡음이 새지 않음).
+- **표 추출**: 표를 실제 2-D 격자로 추출 — 병합 셀(rowspan/colspan)과 여러
+  단락으로 된 셀을 풀어 CSV·Markdown·JSON으로. 텍스트 추출이 주는 흩어진
+  줄 나열이 아니라 행·열 구조가 살아 있는 표를 얻습니다.
 - **검사**: 구조 분석 — 스트림 목록, 압축/암호화 여부, 레코드 태그 개수,
   정밀 편집을 위한 단락별 인덱스.
 - **편집·양식 채우기**: 문서를 깨뜨리지 않고 편집 — `.hwp`·`.hwpx` 모두
@@ -122,6 +125,7 @@ pip install olefile
 - “이 위임장.hwp에서 텍스트만 뽑아줘.”
 - “사업계획서.hwp를 다섯 줄로 요약해줘.”
 - “이 폐업신고서.hwpx 내용을 **표까지 포함해서** 정리해줘.”
+- “예산안.hwp의 표를 CSV로 뽑아줘 (병합된 칸도 살려서).”
 - “보고서.hwp를 깔끔한 Markdown으로 변환해줘.”
 
 **양식·템플릿 채우기** — 가장 흔한 요청
@@ -168,6 +172,7 @@ pip install olefile
 cd scripts
 
 python hwp_extract.py FILE.hwp                    # 텍스트 읽기(.hwpx 자동 감지)
+python hwp_tables.py  FILE.hwp -f csv             # 표를 실제 격자로(md/csv/json)
 python hwp_inspect.py FILE.hwp --paragraphs       # 편집 전 검사: 정확한 플레이스홀더 + 인덱스
 
 # 양식 채우기 — --paragraphs 출력에서 플레이스홀더를 그대로 복사
@@ -197,6 +202,7 @@ python hwp_extract.py OUT.hwp                      # 검증
 | | `.hwp` | `.hwpx` |
 |---|:---:|:---:|
 | 텍스트 추출(표·다중 섹션·제어문자 정리) | ✅ | ✅ |
+| 표를 구조화된 격자로 추출(CSV/Markdown/JSON) | ✅ | ✅ |
 | 스트림/압축/암호화/메타데이터 검사 | ✅ | ✅ (zip 멤버) |
 | find-replace 양식 채우기 | ✅ | ✅ |
 | 레코드 인덱스로 셀 설정 | ✅ | ⛔ (find-replace 사용) |

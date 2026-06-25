@@ -4,6 +4,9 @@ pymupdf>=1.23      # pdf-parser core (imported as fitz)
 pdfplumber>=0.10   # pdf-parser table extraction
 reportlab>=4       # pdf-parser test fixtures (PDF generation)
 pillow>=10         # pdf-parser test fixtures (scanned-page raster)
+openpyxl>=3.1      # xlsx-parser core (imported as openpyxl)
+python-docx>=1.1   # docx-parser core (imported as docx)
+python-pptx>=1.0   # pptx-parser core (imported as pptx)
 pytest>=7
 
 # Optional per-skill extras:

@@ -55,6 +55,7 @@ cd <skill>/scripts
 | Goal | Do this |
 |---|---|
 | Read / summarize the text | `hwp_extract.py` (or `pyhwp` for Markdown/HTML) |
+| Pull tables out as a real grid (CSV/Markdown/JSON) | `hwp_tables.py` |
 | See structure, streams, metadata, paragraph indices | `hwp_inspect.py` |
 | Fill a template / find-replace text | `hwp_edit.py replace` |
 | Set specific cells precisely | `hwp_edit.py set` (indices from inspect) |
@@ -185,7 +186,32 @@ convert the result and verify that values are in the expected table cells. Also
 remember that low-level BodyText edits may leave `PrvText` and `PrvImage`
 preview streams stale; do not use file-manager previews as the only check.
 
-## 4. Convert to text / Markdown / HTML
+## 4. Extract tables as a real grid
+
+`hwp_extract.py` marks a table only as `[표]` and flattens its cells into a
+loose run of lines. When the user wants the **table** — 예산표, 일정표, 결재
+양식, 명단 — use `hwp_tables.py`, which rebuilds the real 2-D grid (resolving
+merged cells and multi-paragraph cells) for both `.hwp` and `.hwpx`:
+
+```bash
+python hwp_tables.py FILE.hwp                  # every table as Markdown (GFM)
+python hwp_tables.py FILE.hwp -f csv -t 2      # only the 2nd table, as CSV
+python hwp_tables.py FILE.hwpx -f json -o tables.json
+```
+
+- `-f md|csv|json` — Markdown (default), CSV, or a JSON element tree
+  (`{tables:[{section,index,nrows,ncols,grid,spans}]}`).
+- `--expand blank|duplicate` — how a **merged** cell fills the positions it
+  covers: `blank` (default for md/json, the visual layout) or `duplicate`
+  (default for csv, so every row is self-contained for spreadsheet/SQL import).
+- `-t N` — output only the Nth table (1-based); omit for all.
+
+Markdown output appends a `> 병합 셀(rowspan×colspan): …` note listing any
+merged spans, since GFM tables can't express them natively. Nested tables (a
+table inside a cell) come out as their own separate entries — a parent cell
+never leaks its nested table's text.
+
+## 5. Convert to text / Markdown / HTML
 
 `pyhwp` ships CLI converters (after `pip install pyhwp`):
 
@@ -195,8 +221,9 @@ hwp5html --output DIR FILE.hwp    # XHTML + CSS (tables preserved)
 hwp5odt  FILE.hwp                 # OpenDocument (open/convert in LibreOffice)
 ```
 
-`hwp5txt` shows tables only as a `<표>` marker; for table content use
-`hwp5html` and parse the XHTML, or use this skill's `hwp_extract.py`.
+`hwp5txt` shows tables only as a `<표>` marker; for table **content** use this
+skill's `hwp_tables.py` (CSV/Markdown/JSON, §4), or `hwp5html` and parse the
+XHTML for a layout-preserving view.
 
 ## Library use (Python)
 
@@ -205,6 +232,7 @@ For custom work, import the bundled library:
 ```python
 import hwp_lib
 hwp_lib.extract_text("f.hwp")                      # -> str
+hwp_lib.extract_tables("f.hwp")                    # -> list[table dict]; see table_grid()
 hwp_lib.inspect("f.hwp")                           # -> dict
 hwp_lib.replace_text("in.hwp","out.hwp",[("OLD","NEW")])
 hwp_lib.set_paragraph_text("in.hwp","out.hwp",{"BodyText/Section0":{136:"..."}})

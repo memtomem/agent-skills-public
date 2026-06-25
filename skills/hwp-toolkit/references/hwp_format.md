@@ -85,7 +85,33 @@ garbage (you'll see text like `dse lco tbl` at the top of a section). Always
 When editing, the toolkit keeps every control character in place and only
 substitutes visible text, so widths and downstream controls are preserved.
 
-## 7. What the editor changes (and why it's safe)
+## 7. Tables (structured grid extraction)
+`extract_text` only emits a `[표]` marker; `extract_tables` rebuilds the real
+2-D grid. A table is a control whose children form this run (deeper `level`
+shown indented):
+
+```
+CTRL_HEADER(71)  'tbl '
+  TABLE(77)            flags u32 | nRows u16 | nCols u16 | …(rowSizes, borders)
+  LIST_HEADER(72)      cell (0,0): npara u16 | flags u32 | col u16 | row u16 |
+    PARA_HEADER(66)                colSpan u16 | rowSpan u16 | w u32 | h u32 | …
+    PARA_TEXT(67)      ← the cell's own text, one level below its LIST_HEADER
+  LIST_HEADER(72)      cell (1,0) …
+```
+
+So the parser (`_tables_from_records`): for each `TABLE` record it reads
+`nRows`/`nCols` (offsets 4/6), then walks forward while `level >=` the table's
+level, treating each `LIST_HEADER` at exactly that level as a cell and reading
+`col,row,colSpan,rowSpan` (offsets 6,8,10,12). A cell's text is the `PARA_TEXT`
+**one level below the cell's first `PARA_HEADER`** — so a *nested* table's
+deeper paragraphs never leak into the parent cell, and each nested `TABLE`
+record is reconstructed as its own grid. A merged cell appears once (top-left);
+`table_grid(expand=…)` leaves covered positions blank or repeats the value, and
+the `spans` list records every `rowSpan`/`colSpan` > 1 for GFM/JSON consumers.
+`.hwpx` mirrors this with `<hp:tbl rowCnt/colCnt>` → `<hp:tr>` → `<hp:tc>`
+(`<hp:cellAddr>`/`<hp:cellSpan>`), parsed via ElementTree.
+
+## 8. What the editor changes (and why it's safe)
 For each edited paragraph the toolkit changes exactly two things:
 1. the `PARA_TEXT` payload (new UTF-16-LE bytes), and
 2. the first uint32 of the owning `PARA_HEADER` = the paragraph's **character
@@ -103,7 +129,7 @@ paragraphs/rows/images means adding records *and* fixing the parent
 `LIST_HEADER`/cell counts and `DocInfo` references — out of scope. Fill
 existing slots, or have the user add empty rows in Hangul first.
 
-## 8. Variants
+## 9. Variants
 - **Uncompressed**: handled automatically.
 - **Multi-section**: `extract_text`/`replace_text` iterate every
   `BodyText/SectionN`; `set_paragraph_text` takes the section name as a key.
@@ -125,7 +151,7 @@ existing slots, or have the user add empty rows in Hangul first.
   Recent Hangul opens both formats interchangeably; if a user only needs *a*
   working Hangul file, editing `.hwpx` is often easier than binary `.hwp`.
 
-## 9. Quick troubleshooting
+## 10. Quick troubleshooting
 - *Garbled ASCII in extracted text* → inline-control skipping; use `walk_text`.
 - *`replace` reports 0 hits* → the `old` string's spacing/bullets don't match;
   copy it verbatim from `hwp_inspect.py --paragraphs`.
