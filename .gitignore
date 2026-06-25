@@ -25,6 +25,14 @@ tests/**/fixtures/_*
 examples/hwp/
 examples/pdf/
 
+# Internal AI-agent dev tooling — keep private, never publish
+.agents/
+.dev-trio/
+*.bundle
+
+# Clean public tree produced by scripts/export_public.py (regenerated)
+dist/public/
+
 # OS / editor
 .DS_Store
 .idea/
